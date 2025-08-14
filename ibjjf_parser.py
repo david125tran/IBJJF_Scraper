@@ -56,7 +56,8 @@ tourney_club_map = {
     "2673": ["Jiu-Jitsu Con International", ["4440", "219"]],
     "2674": ["Jiu-Jitsu CON No-Gi International", ["4440", "219"]],
     "2675": ["Jiu-Jitsu Con Novice International", ["4440", "219"]],
-    "2676": ["Jiu-Jitsu CON Kids International", ["4440", "219"]]       
+    "2676": ["Jiu-Jitsu CON Kids International", ["4440", "219"]],
+    "2802": ["Jiu-Jitsu CON Kids No-Gi International", ["4440", "219"]]     
 }
 
 # # Teams to pull for each tourney:
