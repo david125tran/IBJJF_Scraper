@@ -13,6 +13,7 @@ import pandas as pd
 from pathlib import Path
 from openpyxl import Workbook, load_workbook, styles
 from openpyxl.styles import Font, PatternFill, Alignment
+import re
 from sys import exit
 
 # ---------------------------------------- HTML Color Code Constants ----------------------------------------
@@ -119,6 +120,8 @@ def parse_registration(tourney_id: str, team: str):
             rank = rank.strip()
             age_group = age_group.strip()
             gender = gender.strip()
+            # Strip the weight (Ex.  ('222.00lb') from 'Super Heavy (222.00lb)')
+            weight_class = weight_class.split(" (")[0]
             weight_class = weight_class.strip()
 
             # Division code
@@ -195,6 +198,7 @@ def get_bracket_map(tourney_id: str):
 
     # Zip -> dict
     full_urls = [BJJ_BASE + u for u in bracket_urls]
+
     return dict(zip(brackets_classification, full_urls))
 
 
@@ -242,6 +246,47 @@ def scrape_assignments(tourney_id: str, club_id: int):
 
     return name_to_slot
 
+
+def _strip_ws_dash(s: str) -> str:
+    # remove spaces and dashes, lower-case
+    return re.sub(r"[\s\-]+", "", s or "").lower()
+
+
+def _norm_class_key(k: str) -> str:
+    """
+    Canonicalize Division/Gender/Rank/Weight so tiny text differences don't matter.
+    """
+    if not k:
+        return k
+    parts = [p.strip() for p in k.split("/", 3)]
+    if len(parts) != 4:
+        return k
+    div, gen, rank, weight = parts
+
+    # Normalize unicode spaces/dashes in weight then collapse to single spaces
+    weight = (weight or "")
+    weight = (weight
+        .replace("\u00a0", " ")
+        .replace("\u2013", "-")
+        .replace("\u2011", "-")
+        .strip()
+    )
+    if weight != "Open Class":
+        weight = re.sub(r"[\s\-]+", " ", weight)
+
+    # Canonical casing:
+    # - Gender should be a single letter M/F
+    # - Rank to UPPER to match registration variants like "BLUE"
+    gen  = (gen[:1] or "").upper()
+    rank = (rank or "").upper()
+
+    # Collapse extra spaces
+    div    = re.sub(r"\s+", " ", div or "")
+    weight = re.sub(r"\s+", " ", weight or "")
+
+    return f"{div}/{gen}/{rank}/{weight}"
+
+
 # ---------------------------------------- Main: loop everything and aggregate ----------------------------------------
 all_rows = []
 all_ranks = []
@@ -249,6 +294,9 @@ all_urls = []
 
 for tourney_id, (event, club_ids) in tourney_club_map.items():  # <— unpack event and club IDs
     bracket_map = get_bracket_map(tourney_id)
+
+    # Normalized view for robust lookups
+    norm_bracket_map = { _norm_class_key(k): v for k, v in bracket_map.items() }
 
     for team in teams_list:
         rows, ranks = parse_registration(tourney_id, team)
@@ -260,7 +308,7 @@ for tourney_id, (event, club_ids) in tourney_club_map.items():  # <— unpack ev
             r["Event"] = event
 
         # Attach bracket URLs per-row based on classification
-        urls_for_rows = [bracket_map.get(r["Classification"], "No bracket") for r in rows]
+        urls_for_rows = [norm_bracket_map.get(_norm_class_key(r["Classification"]), "No bracket") for r in rows]
 
         # Try to fill time/mat from every club id listed for this tourney
         for club_id in club_ids:
